@@ -1,0 +1,60 @@
+{
+  "name": "vent-widget",
+  "version": "0.1.0",
+  "description": "MCP server that lets AI agents vent friction into .vents/ markdown files in your repo",
+  "type": "module",
+  "main": "dist/vent-widget.js",
+  "bin": {
+    "vent-widget": "dist/vent-widget.js"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "SPEC.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node build.js",
+    "dev": "tsx src/server.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "claude-code",
+    "ai-agents",
+    "feedback",
+    "vent",
+    "agent-feedback",
+    "anthropic"
+  ],
+  "author": "Charles Theunissen",
+  "license": "MIT",
+  "homepage": "https://github.com/CharlesTThe/vent-widget#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CharlesTThe/vent-widget.git"
+  },
+  "bugs": {
+    "url": "https://github.com/CharlesTThe/vent-widget/issues"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "uuid": "^9.0.1",
+    "yaml": "^2.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/uuid": "^9.0.7",
+    "esbuild": "^0.25.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
