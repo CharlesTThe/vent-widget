@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "vent": {
+      "command": "npx",
+      "args": ["-y", "vent-widget"],
+      "env": {
+        "VENT_COMMIT_MODE": "none",
+        "VENT_AGENT_LABEL": "claude-code"
+      }
+    }
+  }
+}
