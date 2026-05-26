@@ -372,7 +372,7 @@ npm run dev           # tsx src/server.ts
 ## Acknowledgments
 
 - **Lovable** for the [original vent tool blog post](https://lovable.dev/blog/we-gave-our-agent-a-vent-tool) and the lesson that example-driven prompts beat rule-based eligibility logic.
-- **sticky-widget** for the structural template (small src, externalised deps, drop-in package).
+- **[sticky-widget](https://github.com/CharlesTThe/sticky-widget)** — the user-side companion to vent-widget. Same feedback-capture mission, different actor: vent-widget captures agent friction, sticky-widget captures user friction on AI-generated UIs.
 - **Anthropic** for [the Model Context Protocol](https://modelcontextprotocol.io) and the [TS SDK](https://github.com/modelcontextprotocol/typescript-sdk).
 
 ---
@@ -380,4 +380,5 @@ npm run dev           # tsx src/server.ts
 ## See also
 
 - [SPEC.md](./SPEC.md) — design decisions, field-by-field rationale, deferred features.
+- [sticky-widget](https://github.com/CharlesTThe/sticky-widget) — companion project for user-side feedback on AI-generated UIs.
 - [Lovable blog post](https://lovable.dev/blog/we-gave-our-agent-a-vent-tool) — the original inspiration.
