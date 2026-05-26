@@ -42,16 +42,24 @@ function loadConfig(env = process.env) {
 
 // src/tools/vent.ts
 import { mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { v4 as uuidv4 } from "uuid";
 
 // src/enrichment.ts
 import { execFileSync } from "node:child_process";
 import { basename } from "node:path";
+var gitMissingLogged = false;
 function git(cwd, args) {
   try {
     return execFileSync("git", args, { cwd, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
-  } catch {
+  } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "ENOENT" && !gitMissingLogged) {
+      gitMissingLogged = true;
+      process.stderr.write(
+        "[vent-widget] git binary not found on PATH \u2014 vents will lack branch/sha metadata.\n"
+      );
+    }
     return null;
   }
 }
@@ -96,20 +104,25 @@ function isGitRepo(cwd) {
 function git2(cwd, args) {
   execFileSync2("git", args, { cwd, stdio: ["ignore", "ignore", "pipe"] });
 }
+function errMessage(err) {
+  if (!(err instanceof Error)) return String(err);
+  const stderr = "stderr" in err ? err.stderr?.toString().trim() : "";
+  return stderr || err.message;
+}
 function handleCommit({ mode, cwd, file, summary }) {
-  if (mode === "none") return;
-  if (!isGitRepo(cwd)) return;
+  if (mode === "none") return { status: "skipped", reason: "commit mode is none" };
+  if (!isGitRepo(cwd)) return { status: "skipped", reason: "cwd is not a git repo" };
   const rel = relative(cwd, file);
   try {
     switch (mode) {
       case "stage":
         git2(cwd, ["add", "--", rel]);
-        return;
+        return { status: "ok", reason: null };
       case "commit": {
         git2(cwd, ["add", "--", rel]);
         const shortSummary = summary.slice(0, MAX_COMMIT_SUMMARY).trim() || "new vent";
         git2(cwd, ["commit", "-q", "-m", `vent: ${shortSummary}`, "--", rel]);
-        return;
+        return { status: "ok", reason: null };
       }
       default: {
         const _exhaustive = mode;
@@ -117,11 +130,10 @@ function handleCommit({ mode, cwd, file, summary }) {
       }
     }
   } catch (err) {
-    const stderr = err instanceof Error && "stderr" in err ? err.stderr?.toString().trim() : "";
-    if (stderr) {
-      process.stderr.write(`[vent-widget] git operation failed (vent file was saved): ${stderr}
+    const reason = errMessage(err);
+    process.stderr.write(`[vent-widget] git ${mode} failed (vent file was saved): ${reason}
 `);
-    }
+    return { status: "failed", reason };
   }
 }
 
@@ -148,10 +160,9 @@ async function handleVent({ message, cwd, config: config2 }) {
   }
   const id = uuidv4();
   const { iso, filenameStamp } = isoStamp();
-  const ventDir = join(cwd, config2.ventDir);
-  if (!existsSync(ventDir)) mkdirSync(ventDir, { recursive: true });
   const filename = `${filenameStamp}-${id.slice(0, 4)}.md`;
-  const path = join(ventDir, filename);
+  const primaryDir = join(cwd, config2.ventDir);
+  const primaryPath = join(primaryDir, filename);
   const git3 = detectGitMetadata(cwd);
   const project = config2.projectName ?? detectProjectName(cwd);
   const fm = {
@@ -165,12 +176,30 @@ async function handleVent({ message, cwd, config: config2 }) {
     status: "open",
     tags: []
   };
-  if (existsSync(path)) {
-    throw new Error(`vent file already exists at ${path}`);
+  if (existsSync(primaryPath)) {
+    throw new Error(`vent file already exists at ${primaryPath}`);
   }
-  writeFileSync(path, serializeVent(fm, trimmed));
-  handleCommit({ mode: config2.commitMode, cwd, file: path, summary: firstLine(trimmed) });
-  return { id, path };
+  const serialized = serializeVent(fm, trimmed);
+  let path = primaryPath;
+  let fallback = false;
+  let fallbackReason = null;
+  try {
+    if (!existsSync(primaryDir)) mkdirSync(primaryDir, { recursive: true });
+    writeFileSync(primaryPath, serialized);
+  } catch (err) {
+    fallback = true;
+    fallbackReason = err instanceof Error ? err.message : String(err);
+    const fallbackDir = join(tmpdir(), "vent-widget-fallback");
+    if (!existsSync(fallbackDir)) mkdirSync(fallbackDir, { recursive: true });
+    path = join(fallbackDir, filename);
+    writeFileSync(path, serialized);
+    process.stderr.write(
+      `[vent-widget] could not write to ${primaryDir} (${fallbackReason}); vent saved to fallback: ${path}
+`
+    );
+  }
+  const commit = handleCommit({ mode: config2.commitMode, cwd, file: path, summary: firstLine(trimmed) });
+  return { id, path, fallback, fallbackReason, commitStatus: commit.status, commitReason: commit.reason };
 }
 
 // src/server.ts
@@ -227,8 +256,16 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     switch (req.params.name) {
       case "vent": {
         const r = await handleVent({ message: String(args.message ?? ""), cwd, config });
-        return { content: [{ type: "text", text: `Vented: ${r.id}
-File: ${r.path}` }] };
+        const lines = [`Vented: ${r.id}`, `File: ${r.path}`];
+        if (r.fallback) {
+          lines.push(`Note: primary vent dir was unwritable (${r.fallbackReason}). Saved to fallback path above.`);
+        }
+        if (r.commitStatus === "failed") {
+          lines.push(`Commit: failed \u2014 ${r.commitReason}. Vent file IS saved; only the git operation failed.`);
+        } else if (r.commitStatus === "ok") {
+          lines.push(`Commit: ${config.commitMode === "commit" ? "committed" : "staged"}`);
+        }
+        return { content: [{ type: "text", text: lines.join("\n") }] };
       }
       default:
         return { content: [{ type: "text", text: `Unknown tool: ${req.params.name}` }], isError: true };
