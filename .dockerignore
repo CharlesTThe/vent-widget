@@ -1,0 +1,15 @@
+node_modules
+.git
+.github
+tests
+src
+build.js
+tsconfig.json
+.vents
+.env
+.env.example
+*.log
+.DS_Store
+README.md
+SPEC.md
+LICENSE
