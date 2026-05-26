@@ -66,7 +66,16 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     switch (req.params.name) {
       case 'vent': {
         const r = await handleVent({ message: String(args.message ?? ''), cwd, config });
-        return { content: [{ type: 'text', text: `Vented: ${r.id}\nFile: ${r.path}` }] };
+        const lines = [`Vented: ${r.id}`, `File: ${r.path}`];
+        if (r.fallback) {
+          lines.push(`Note: primary vent dir was unwritable (${r.fallbackReason}). Saved to fallback path above.`);
+        }
+        if (r.commitStatus === 'failed') {
+          lines.push(`Commit: failed — ${r.commitReason}. Vent file IS saved; only the git operation failed.`);
+        } else if (r.commitStatus === 'ok') {
+          lines.push(`Commit: ${config.commitMode === 'commit' ? 'committed' : 'staged'}`);
+        }
+        return { content: [{ type: 'text', text: lines.join('\n') }] };
       }
       default:
         return { content: [{ type: 'text', text: `Unknown tool: ${req.params.name}` }], isError: true };

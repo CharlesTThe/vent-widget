@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, readFileSync, readdirSync, existsSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, existsSync, mkdirSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
@@ -98,5 +98,27 @@ describe('handleVent', () => {
     });
     const log = execSync('git log --oneline -1', { cwd: dir }).toString();
     expect(log).toMatch(/vent: the scheduler is broken again/);
+  });
+
+  it('falls back to os.tmpdir when ventDir is unwritable', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'vent-eacces-'));
+    // Pre-create .vents as read-only so creating new files inside fails with EACCES
+    mkdirSync(join(cwd, '.vents'));
+    chmodSync(join(cwd, '.vents'), 0o500); // r-x: cannot create new files
+
+    try {
+      const result = await handleVent({
+        message: 'cannot write here',
+        cwd,
+        config: loadConfig({}),
+      });
+      // Vent must NOT be lost — it lands in tmpdir as fallback
+      expect(result.fallback).toBe(true);
+      expect(result.path.startsWith(tmpdir())).toBe(true);
+      expect(result.fallbackReason).toMatch(/EACCES|permission/i);
+      expect(readFileSync(result.path, 'utf8')).toContain('cannot write here');
+    } finally {
+      chmodSync(join(cwd, '.vents'), 0o700); // restore so cleanup works
+    }
   });
 });

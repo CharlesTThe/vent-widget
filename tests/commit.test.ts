@@ -61,4 +61,37 @@ describe('handleCommit', () => {
       handleCommit({ mode: 'commit', cwd: dir, file, summary: 'hello' })
     ).not.toThrow();
   });
+
+  it('reports ok status on successful commit', () => {
+    const dir = makeRepo();
+    const file = writeVent(dir, 'ok.md', 'hi\n');
+    const result = handleCommit({ mode: 'commit', cwd: dir, file, summary: 'test ok' });
+    expect(result.status).toBe('ok');
+    expect(result.reason).toBeNull();
+  });
+
+  it('reports skipped status when mode=none', () => {
+    const dir = makeRepo();
+    const file = writeVent(dir, 'skip.md', 'hi\n');
+    const result = handleCommit({ mode: 'none', cwd: dir, file, summary: 'x' });
+    expect(result.status).toBe('skipped');
+  });
+
+  it('reports skipped status when not a git repo', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'vent-nogit-skip-'));
+    const file = writeVent(dir, 'skip.md', 'hi\n');
+    const result = handleCommit({ mode: 'commit', cwd: dir, file, summary: 'x' });
+    expect(result.status).toBe('skipped');
+  });
+
+  it('reports failed status when git index is locked', () => {
+    const dir = makeRepo();
+    const file = writeVent(dir, 'lock.md', 'hi\n');
+    // Simulate a locked index — git refuses to add/commit
+    writeFileSync(join(dir, '.git', 'index.lock'), '');
+
+    const result = handleCommit({ mode: 'commit', cwd: dir, file, summary: 'test' });
+    expect(result.status).toBe('failed');
+    expect(result.reason).toMatch(/index\.lock|already exists|unable to/i);
+  });
 });

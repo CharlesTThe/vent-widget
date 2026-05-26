@@ -1,10 +1,11 @@
 import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { v4 as uuidv4 } from 'uuid';
 import type { Config } from '../config.js';
 import { detectGitMetadata, detectProjectName } from '../enrichment.js';
 import { serializeVent, type VentFrontmatter } from '../frontmatter.js';
-import { handleCommit } from '../commit.js';
+import { handleCommit, type CommitStatus } from '../commit.js';
 
 export interface VentArgs {
   message: string;
@@ -15,6 +16,10 @@ export interface VentArgs {
 export interface VentResult {
   id: string;
   path: string;
+  fallback: boolean;
+  fallbackReason: string | null;
+  commitStatus: CommitStatus;
+  commitReason: string | null;
 }
 
 function isoStamp(): { iso: string; filenameStamp: string } {
@@ -43,11 +48,10 @@ export async function handleVent({ message, cwd, config }: VentArgs): Promise<Ve
 
   const id = uuidv4();
   const { iso, filenameStamp } = isoStamp();
-  const ventDir = join(cwd, config.ventDir);
-  if (!existsSync(ventDir)) mkdirSync(ventDir, { recursive: true });
-
   const filename = `${filenameStamp}-${id.slice(0, 4)}.md`;
-  const path = join(ventDir, filename);
+
+  const primaryDir = join(cwd, config.ventDir);
+  const primaryPath = join(primaryDir, filename);
 
   const git = detectGitMetadata(cwd);
   const project = config.projectName ?? detectProjectName(cwd);
@@ -66,12 +70,33 @@ export async function handleVent({ message, cwd, config }: VentArgs): Promise<Ve
 
   // Defensive: UUIDv4 collision probability is vanishingly small but the spec
   // promises no silent overwrite, so we throw rather than clobber.
-  if (existsSync(path)) {
-    throw new Error(`vent file already exists at ${path}`);
+  if (existsSync(primaryPath)) {
+    throw new Error(`vent file already exists at ${primaryPath}`);
   }
 
-  writeFileSync(path, serializeVent(fm, trimmed));
-  handleCommit({ mode: config.commitMode, cwd, file: path, summary: firstLine(trimmed) });
+  const serialized = serializeVent(fm, trimmed);
 
-  return { id, path };
+  let path = primaryPath;
+  let fallback = false;
+  let fallbackReason: string | null = null;
+
+  try {
+    if (!existsSync(primaryDir)) mkdirSync(primaryDir, { recursive: true });
+    writeFileSync(primaryPath, serialized);
+  } catch (err) {
+    fallback = true;
+    fallbackReason = err instanceof Error ? err.message : String(err);
+    const fallbackDir = join(tmpdir(), 'vent-widget-fallback');
+    if (!existsSync(fallbackDir)) mkdirSync(fallbackDir, { recursive: true });
+    path = join(fallbackDir, filename);
+    writeFileSync(path, serialized);
+    process.stderr.write(
+      `[vent-widget] could not write to ${primaryDir} (${fallbackReason}); ` +
+      `vent saved to fallback: ${path}\n`
+    );
+  }
+
+  const commit = handleCommit({ mode: config.commitMode, cwd, file: path, summary: firstLine(trimmed) });
+
+  return { id, path, fallback, fallbackReason, commitStatus: commit.status, commitReason: commit.reason };
 }
