@@ -378,5 +378,4 @@ npm run dev           # tsx src/server.ts
 ## See also
 
 - [SPEC.md](./SPEC.md) — design decisions, field-by-field rationale, deferred features.
-- [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) — the build plan (TDD tasks).
 - [Lovable blog post](https://lovable.dev/blog/we-gave-our-agent-a-vent-tool) — the original inspiration.
