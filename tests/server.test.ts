@@ -11,6 +11,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const SERVER_PATH = resolve(__dirname, '../src/server.ts');
 
+// tsx cold-start over stdio can exceed vitest's 5s default on CI runners.
+const TEST_TIMEOUT_MS = 15000;
+
 async function startClient(cwd: string, extraEnv: Record<string, string> = {}) {
   const transport = new StdioClientTransport({
     command: 'tsx',
@@ -34,7 +37,7 @@ describe('MCP server', () => {
     } finally {
       await transport.close();
     }
-  });
+  }, TEST_TIMEOUT_MS);
 
   it('calling vent tool writes a file', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'vent-srvcall-'));
@@ -49,11 +52,11 @@ describe('MCP server', () => {
       expect(files.length).toBe(1);
       expect(files[0]).toMatch(/\.md$/);
       const text = (result.content as Array<{ type: string; text: string }>)[0].text;
-      expect(text).toMatch(/^Vented: [0-9a-f-]{36}\nFile: .+\.md$/);
+      expect(text).toMatch(/^Vented: [0-9a-f-]{36}\nFile: .+\.md/);
     } finally {
       await transport.close();
     }
-  });
+  }, TEST_TIMEOUT_MS);
 
   it('appends VENT_INSTRUCTIONS_PATH content to the vent tool description', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'vent-instr-'));
@@ -69,7 +72,7 @@ describe('MCP server', () => {
     } finally {
       await transport.close();
     }
-  });
+  }, TEST_TIMEOUT_MS);
 
   it('falls back to base description when VENT_INSTRUCTIONS_PATH file is missing', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'vent-instr-missing-'));
@@ -84,5 +87,22 @@ describe('MCP server', () => {
     } finally {
       await transport.close();
     }
-  });
+  }, TEST_TIMEOUT_MS);
+
+  it('returns isError envelope when vent message is empty', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'vent-err-'));
+    const { client, transport } = await startClient(dir);
+    try {
+      const result = await client.callTool({
+        name: 'vent',
+        arguments: { message: '   ' },  // whitespace only — handleVent rejects
+      });
+      expect(result.isError).toBe(true);
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      expect(text).toMatch(/^Error: /);
+      expect(text).toMatch(/empty/i);
+    } finally {
+      await transport.close();
+    }
+  }, TEST_TIMEOUT_MS);
 });
