@@ -84,17 +84,6 @@ Only spaceless filenames copy successfully.
 
 ## Install
 
-> **Note:** `vent-widget` is not yet on npm. Until then, install from source:
->
-> ```bash
-> git clone https://github.com/CharlesTThe/vent-widget.git
-> cd vent-widget
-> npm install
-> npm run build
-> ```
->
-> Then in the host configs below, replace `"command": "npx", "args": ["-y", "vent-widget"]` with `"command": "node", "args": ["/absolute/path/to/vent-widget/dist/vent-widget.js"]`. Once published to npm, the `npx` form below will work directly.
-
 ### Claude Code
 
 Add to `~/.claude/mcp.json` (create if missing):
