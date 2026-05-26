@@ -6,12 +6,28 @@ export interface GitMetadata {
   head_sha: string | null;
 }
 
+let gitMissingLogged = false;
+
 function git(cwd: string, args: string[]): string | null {
   try {
     return execFileSync('git', args, { cwd, stdio: ['ignore', 'pipe', 'ignore'] })
       .toString()
       .trim();
-  } catch {
+  } catch (err) {
+    // ENOENT = git binary not on PATH. Distinct from "not a git repo" (exit 128).
+    // Log once per process so we don't spam stderr on every vent.
+    if (
+      err &&
+      typeof err === 'object' &&
+      'code' in err &&
+      (err as { code?: string }).code === 'ENOENT' &&
+      !gitMissingLogged
+    ) {
+      gitMissingLogged = true;
+      process.stderr.write(
+        '[vent-widget] git binary not found on PATH — vents will lack branch/sha metadata.\n'
+      );
+    }
     return null;
   }
 }

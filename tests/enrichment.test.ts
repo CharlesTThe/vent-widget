@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -34,6 +34,28 @@ describe('detectGitMetadata', () => {
     execSync('git init -q', { cwd: dir });
     const meta = detectGitMetadata(dir);
     expect(meta.head_sha).toBeNull();
+  });
+
+  it('logs to stderr when git binary is unavailable', async () => {
+    // Re-import the module so its `gitMissingLogged` once-flag is reset.
+    vi.resetModules();
+    const { detectGitMetadata: detectFresh } = await import('../src/enrichment.js');
+
+    const writeSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const originalPath = process.env.PATH;
+    process.env.PATH = '';
+
+    try {
+      const dir = mkdtempSync(join(tmpdir(), 'vent-nogit-bin-'));
+      const meta = detectFresh(dir);
+      expect(meta.branch).toBeNull();
+      expect(meta.head_sha).toBeNull();
+      const logged = writeSpy.mock.calls.map((c) => String(c[0])).join('');
+      expect(logged).toMatch(/git binary not found/i);
+    } finally {
+      process.env.PATH = originalPath;
+      writeSpy.mockRestore();
+    }
   });
 });
 
